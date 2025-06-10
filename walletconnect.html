@@ -1,37 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Connect Wallet</title>
+  <title>MetaMask Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body>
-    <h1>Connect to MetaMask</h1>
-    <button onclick="connectWallet()">Connect Wallet</button>
+  <h1>Hello from GitHub Pages!</h1>
+  <button onclick="connectWallet()">Connect Wallet</button>
 
-    <script>
-        async function connectWallet() {
-            // If MetaMask is not accessible from WebView, redirect to open it in MetaMask mobile app
-            if (typeof window.ethereum === 'undefined') {
-                // Replace with your app's real domain or App ID if hosted
-                const dappUrl = "walletconnectv2test.app"; // This must match your app/site domain
-                window.location.href = `https://metamask.app.link/dapp/${dappUrl}`;
-                return;
-            }
-
-            try {
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                const walletAddress = accounts[0];
-
-                // Send wallet address to Swift via WebKit message handler
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.native) {
-                    window.webkit.messageHandlers.native.postMessage(walletAddress);
-                } else {
-                    console.error("WebKit message handler not available");
-                }
-            } catch (err) {
-                console.error("Failed to connect wallet", err);
-            }
+  <script>
+    async function connectWallet() {
+      if (window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          alert("Connected wallet: " + accounts[0]);
+        } catch (err) {
+          alert("Connection error: " + err.message);
         }
-    </script>
+      } else {
+        alert("MetaMask not detected");
+      }
+    }
+  </script>
 </body>
 </html>
