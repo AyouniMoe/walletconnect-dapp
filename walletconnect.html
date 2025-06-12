@@ -3,7 +3,17 @@
 <head>
   <title>Omics OMC Wallet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js" integrity="sha256-ZxMGrzT0gAKbN0jZxFtb0X2oV22e5Fz3A3F0NaYb6Uc=" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" integrity="sha384-hOyHacV4xxip2p1U2DPVUpUt4iIPkbZ1Qj5iV2In/jqQ0tN9fJOBo5M6l0p2I1mW" crossorigin="anonymous"></script>
+  <script>
+    // Fallback if primary CDN fails
+    if (typeof ethers === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js';
+      script.integrity = 'sha256-ZxMGrzT0gAKbN0jZxFtb0X2oV22e5Fz3A3F0NaYb6Uc=';
+      script.crossOrigin = 'anonymous';
+      document.head.appendChild(script);
+    }
+  </script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -42,10 +52,12 @@
 
   <script>
     // Check if ethers is loaded
-    if (typeof ethers === 'undefined') {
-      document.getElementById("status").innerText = "Error: ethers.js not loaded. Please refresh the page.";
-      throw new Error("ethers.js not loaded");
-    }
+    window.addEventListener('load', () => {
+      if (typeof ethers === 'undefined') {
+        document.getElementById("status").innerText = "Error: ethers.js failed to load. Please refresh or try again later.";
+        throw new Error("ethers.js not loaded");
+      }
+    });
 
     const contractAddress = "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3";
     const contractABI = [
@@ -137,7 +149,7 @@
       try {
         const address = await signer.getAddress();
         const balance = await contract.balanceOf(address);
-        status.innerText = `💰 Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
+        status.innerText = `✔ Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
       } catch (err) {
         status.innerText = `Balance check failed: ${err.message}`;
       }
