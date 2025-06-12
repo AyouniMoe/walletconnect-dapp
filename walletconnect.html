@@ -3,7 +3,7 @@
 <head>
   <title>Omics OMC Wallet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js" integrity="sha256-ZxMGrzT0gAKbN0jZxFtb0X2oV22e5Fz3A3F0NaYb6Uc=" crossorigin="anonymous"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -24,6 +24,12 @@
     h1 {
       color: #333;
     }
+    #status {
+      margin-top: 20px;
+      color: #333;
+      font-size: 14px;
+      word-wrap: break-word;
+    }
   </style>
 </head>
 <body>
@@ -32,68 +38,108 @@
   <button onclick="mintTokens()">🪙 Mint 1 OMC</button>
   <button onclick="burnTokens()">🔥 Burn 1 OMC</button>
   <button onclick="checkBalance()">📊 Check Balance</button>
+  <div id="status">Not connected</div>
 
   <script>
+    // Check if ethers is loaded
+    if (typeof ethers === 'undefined') {
+      document.getElementById("status").innerText = "Error: ethers.js not loaded. Please refresh the page.";
+      throw new Error("ethers.js not loaded");
+    }
+
     const contractAddress = "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3";
     const contractABI = [
       "function mint(uint256 amount) public",
       "function burn(uint256 amount) public",
       "function balanceOf(address account) external view returns (uint256)"
     ];
+    const POLYGON_MAINNET_CHAIN_ID = "0x89"; // 137 in hex
 
     let provider;
     let signer;
     let contract;
 
     async function connectWallet() {
-      if (window.ethereum) {
-        try {
-          provider = new ethers.providers.Web3Provider(window.ethereum);
-          await provider.send("eth_requestAccounts", []);
-          signer = provider.getSigner();
-          contract = new ethers.Contract(contractAddress, contractABI, signer);
-          const address = await signer.getAddress();
-          alert("Wallet connected: " + address);
-        } catch (err) {
-          alert("Connection failed: " + err.message);
+      const status = document.getElementById("status");
+      try {
+        if (!window.ethereum) {
+          status.innerText = "MetaMask not detected. Please install MetaMask.";
+          return;
         }
-      } else {
-        alert("MetaMask not detected. Please install MetaMask.");
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        const network = await provider.getNetwork();
+        if (network.chainId !== 137) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: POLYGON_MAINNET_CHAIN_ID }],
+            });
+            status.innerText = "Switched to Polygon Mainnet";
+          } catch (switchError) {
+            if (switchError.code === 4902) {
+              status.innerText = "Polygon Mainnet not added to MetaMask. Please add it manually.";
+            } else {
+              status.innerText = `Network switch failed: ${switchError.message}`;
+            }
+            return;
+          }
+        }
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+        const address = await signer.getAddress();
+        status.innerText = `Connected: ${address}`;
+      } catch (err) {
+        status.innerText = `Connection failed: ${err.message}`;
       }
     }
 
     async function mintTokens() {
-      if (!contract) return alert("Please connect wallet first.");
+      const status = document.getElementById("status");
+      if (!contract) {
+        status.innerText = "Please connect wallet first.";
+        return;
+      }
       try {
+        status.innerText = "Minting 1 OMC...";
         const amount = ethers.utils.parseUnits("1", 18); // 1 OMC
         const tx = await contract.mint(amount);
         await tx.wait();
-        alert("✅ Minted 1 OMC token!");
+        status.innerText = "✅ Minted 1 OMC token!";
       } catch (err) {
-        alert("Mint failed: " + err.message);
+        status.innerText = `Mint failed: ${err.message}`;
       }
     }
 
     async function burnTokens() {
-      if (!contract) return alert("Please connect wallet first.");
+      const status = document.getElementById("status");
+      if (!contract) {
+        status.innerText = "Please connect wallet first.";
+        return;
+      }
       try {
+        status.innerText = "Burning 1 OMC...";
         const amount = ethers.utils.parseUnits("1", 18); // 1 OMC
         const tx = await contract.burn(amount);
         await tx.wait();
-        alert("🔥 Burned 1 OMC token!");
+        status.innerText = "🔥 Burned 1 OMC token!";
       } catch (err) {
-        alert("Burn failed: " + err.message);
+        status.innerText = `Burn failed: ${err.message}`;
       }
     }
 
     async function checkBalance() {
-      if (!contract) return alert("Please connect wallet first.");
+      const status = document.getElementById("status");
+      if (!contract) {
+        status.innerText = "Please connect wallet first.";
+        return;
+      }
       try {
         const address = await signer.getAddress();
         const balance = await contract.balanceOf(address);
-        alert("💰 Your balance: " + ethers.utils.formatUnits(balance, 18) + " OMC");
+        status.innerText = `💰 Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
       } catch (err) {
-        alert("Balance check failed: " + err.message);
+        status.innerText = `Balance check failed: ${err.message}`;
       }
     }
   </script>
