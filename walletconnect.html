@@ -5,14 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" integrity="sha384-hOyHacV4xxip2p1U2DPVUpUt4iIPkbZ1Qj5iV2In/jqQ0tN9fJOBo5M6l0p2I1mW" crossorigin="anonymous"></script>
   <script>
-    // Fallback if primary CDN fails
+    // Fallback to local ethers.js if CDNs fail
     if (typeof ethers === 'undefined') {
+      console.log('Primary CDN failed, trying local ethers.js');
       var script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js';
-      script.integrity = 'sha256-ZxMGrzT0gAKbN0jZxFtb0X2oV22e5Fz3A3F0NaYb6Uc=';
-      script.crossOrigin = 'anonymous';
+      script.src = 'ethers.min.js';
       document.head.appendChild(script);
     }
+    // Log ethers availability
+    window.addEventListener('load', () => {
+      console.log('Page loaded, ethers defined:', typeof ethers !== 'undefined');
+      if (typeof ethers === 'undefined') {
+        document.getElementById("status").innerText = "Error: ethers.js failed to load. Check console for details.";
+      }
+    });
   </script>
   <style>
     body {
@@ -51,71 +57,64 @@
   <div id="status">Not connected</div>
 
   <script>
-    // Check if ethers is loaded
-    window.addEventListener('load', () => {
-      if (typeof ethers === 'undefined') {
-        document.getElementById("status").innerText = "Error: ethers.js failed to load. Please refresh or try again later.";
-        throw new Error("ethers.js not loaded");
-      }
-    });
-
-    const contractAddress = "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3";
-    const contractABI = [
-      "function mint(uint256 amount) public",
-      "function burn(uint256 amount) public",
-      "function balanceOf(address account) external view returns (uint256)"
-    ];
-    const POLYGON_MAINNET_CHAIN_ID = "0x89"; // 137 in hex
-
-    let provider;
-    let signer;
-    let contract;
-
     async function connectWallet() {
       const status = document.getElementById("status");
       try {
+        console.log('connectWallet called, ethers:', typeof ethers !== 'undefined');
+        if (typeof ethers === 'undefined') {
+          status.innerText = "Error: ethers.js not loaded.";
+          return;
+        }
         if (!window.ethereum) {
           status.innerText = "MetaMask not detected. Please install MetaMask.";
           return;
         }
-        provider = new ethers.providers.Web3Provider(window.ethereum);
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
         await provider.send("eth_requestAccounts", []);
-        signer = provider.getSigner();
+        const signer = provider.getSigner();
         const network = await provider.getNetwork();
         if (network.chainId !== 137) {
           try {
             await window.ethereum.request({
               method: "wallet_switchEthereumChain",
-              params: [{ chainId: POLYGON_MAINNET_CHAIN_ID }],
+              params: [{ chainId: "0x89" }],
             });
             status.innerText = "Switched to Polygon Mainnet";
           } catch (switchError) {
-            if (switchError.code === 4902) {
-              status.innerText = "Polygon Mainnet not added to MetaMask. Please add it manually.";
-            } else {
-              status.innerText = `Network switch failed: ${switchError.message}`;
-            }
+            status.innerText = switchError.code === 4902
+              ? "Polygon Mainnet not added to MetaMask. Please add it manually."
+              : `Network switch failed: ${switchError.message}`;
             return;
           }
         }
-        contract = new ethers.Contract(contractAddress, contractABI, signer);
+        const contract = new ethers.Contract(
+          "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3",
+          [
+            "function mint(uint256 amount) public",
+            "function burn(uint256 amount) public",
+            "function balanceOf(address account) external view returns (uint256)"
+          ],
+          signer
+        );
         const address = await signer.getAddress();
         status.innerText = `Connected: ${address}`;
+        window.contract = contract; // Store globally for other functions
       } catch (err) {
+        console.error('Connection error:', err);
         status.innerText = `Connection failed: ${err.message}`;
       }
     }
 
     async function mintTokens() {
       const status = document.getElementById("status");
-      if (!contract) {
+      if (!window.contract) {
         status.innerText = "Please connect wallet first.";
         return;
       }
       try {
         status.innerText = "Minting 1 OMC...";
-        const amount = ethers.utils.parseUnits("1", 18); // 1 OMC
-        const tx = await contract.mint(amount);
+        const amount = ethers.utils.parseUnits("1", 18);
+        const tx = await window.contract.mint(amount);
         await tx.wait();
         status.innerText = "✅ Minted 1 OMC token!";
       } catch (err) {
@@ -125,14 +124,14 @@
 
     async function burnTokens() {
       const status = document.getElementById("status");
-      if (!contract) {
+      if (!window.contract) {
         status.innerText = "Please connect wallet first.";
         return;
       }
       try {
         status.innerText = "Burning 1 OMC...";
-        const amount = ethers.utils.parseUnits("1", 18); // 1 OMC
-        const tx = await contract.burn(amount);
+        const amount = ethers.utils.parseUnits("1", 18);
+        const tx = await window.contract.burn(amount);
         await tx.wait();
         status.innerText = "🔥 Burned 1 OMC token!";
       } catch (err) {
@@ -142,13 +141,14 @@
 
     async function checkBalance() {
       const status = document.getElementById("status");
-      if (!contract) {
+      if (!window.contract) {
         status.innerText = "Please connect wallet first.";
         return;
       }
       try {
+        const signer = window.contract.signer;
         const address = await signer.getAddress();
-        const balance = await contract.balanceOf(address);
+        const balance = await window.contract.balanceOf(address);
         status.innerText = `✔ Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
       } catch (err) {
         status.innerText = `Balance check failed: ${err.message}`;
