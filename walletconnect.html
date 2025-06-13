@@ -96,7 +96,7 @@
         const contract = new ethers.Contract(
           "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3",
           [
-            "function mint(uint256 amount) public",
+            "function mint(address to, uint256 amount) public",
             "function burn(uint256 amount) public",
             "function balanceOf(address account) external view returns (uint256)",
             "function owner() public view returns (address)"
@@ -132,17 +132,29 @@
       }
       try {
         status.innerText = "Minting 1 OMC...";
+        const address = await window.signer.getAddress();
         const amount = ethers.utils.parseUnits("1", 18);
-        console.log('Minting:', { amount: amount.toString() });
-        const tx = await window.contract.mint(amount, {
-          gasLimit: 150000
+        console.log('Minting:', { to: address, amount: amount.toString() });
+        const tx = await window.contract.mint(address, amount, {
+          gasLimit: 200000
         });
         console.log('Mint tx:', tx);
         await tx.wait();
         status.innerText = "✅ Minted 1 OMC token!";
       } catch (err) {
         console.error('Mint error:', err);
-        status.innerText = `Mint failed: ${err.reason || err.message || 'Transaction reverted. Check contract permissions.'}`;
+        let errorMessage = err.reason || err.message || 'Transaction reverted';
+        if (err.data) {
+          try {
+            const iface = new ethers.utils.Interface([
+              "function mint(address to, uint256 amount) public"
+            ]);
+            errorMessage = iface.parseError(err.data).name || errorMessage;
+          } catch (parseErr) {
+            console.error('Error parsing:', parseErr);
+          }
+        }
+        status.innerText = `Mint failed: ${errorMessage}`;
       }
     }
 
@@ -157,14 +169,14 @@
         const amount = ethers.utils.parseUnits("1", 18);
         console.log('Burning:', { amount: amount.toString() });
         const tx = await window.contract.burn(amount, {
-          gasLimit: 150000
+          gasLimit: 200000
         });
         console.log('Burn tx:', tx);
         await tx.wait();
         status.innerText = "🔥 Burned 1 OMC token!";
       } catch (err) {
         console.error('Burn error:', err);
-        status.innerText = `Burn failed: ${err.reason || err.message || 'Transaction reverted. Check contract permissions.'}`;
+        status.innerText = `Burn failed: ${err.reason || err.message || 'Transaction reverted'}`;
       }
     }
 
@@ -185,7 +197,7 @@
     }
 
     // TODO: For iOS app integration
-    // - Implement backend API to track user points (1000 points = 1 OMC mint).
+    // - Backend API to track user points (1000 points = 1 OMC mint).
     // - Owner signs mint transactions for users via a secure backend (e.g., AWS Lambda).
     // - Users burn tokens directly for in-app purchases, with owner approval if needed.
     // - Use WalletConnect for seamless MetaMask integration in the iOS app.
