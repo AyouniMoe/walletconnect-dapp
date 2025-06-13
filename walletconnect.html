@@ -5,14 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js" integrity="sha384-hOyHacV4xxip2p1U2DPVUpUt4iIPkbZ1Qj5iV2In/jqQ0tN9fJOBo5M6l0p2I1mW" crossorigin="anonymous"></script>
   <script>
-    // Fallback to local ethers.js if CDNs fail
     if (typeof ethers === 'undefined') {
       console.log('Primary CDN failed, trying local ethers.js');
       var script = document.createElement('script');
       script.src = 'ethers.min.js';
       document.head.appendChild(script);
     }
-    // Log ethers availability
     window.addEventListener('load', () => {
       console.log('Page loaded, ethers defined:', typeof ethers !== 'undefined');
       if (typeof ethers === 'undefined') {
@@ -37,6 +35,10 @@
       background-color: #6200ea;
       color: white;
     }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
     h1 {
       color: #333;
     }
@@ -51,14 +53,18 @@
 <body>
   <h1>Omics OMC Wallet Demo</h1>
   <button onclick="connectWallet()">🔗 Connect Wallet</button>
-  <button onclick="mintTokens()">🪙 Mint 1 OMC</button>
-  <button onclick="burnTokens()">🔥 Burn 1 OMC</button>
+  <button id="mintButton" onclick="mintTokens()" disabled>🪙 Mint 1 OMC</button>
+  <button id="burnButton" onclick="burnTokens()" disabled>🔥 Burn 1 OMC</button>
   <button onclick="checkBalance()">📊 Check Balance</button>
   <div id="status">Not connected</div>
 
   <script>
+    let isOwner = false;
+
     async function connectWallet() {
       const status = document.getElementById("status");
+      const mintButton = document.getElementById("mintButton");
+      const burnButton = document.getElementById("burnButton");
       try {
         console.log('connectWallet called, ethers:', typeof ethers !== 'undefined');
         if (typeof ethers === 'undefined') {
@@ -92,13 +98,26 @@
           [
             "function mint(uint256 amount) public",
             "function burn(uint256 amount) public",
-            "function balanceOf(address account) external view returns (uint256)"
+            "function balanceOf(address account) external view returns (uint256)",
+            "function owner() public view returns (address)"
           ],
           signer
         );
         const address = await signer.getAddress();
-        status.innerText = `Connected: ${address}`;
-        window.contract = contract; // Store globally for other functions
+        const owner = await contract.owner();
+        console.log('Connected address:', address, 'Contract owner:', owner);
+        isOwner = address.toLowerCase() === owner.toLowerCase();
+        if (isOwner) {
+          status.innerText = `Connected: ${address} (Contract owner)`;
+          mintButton.disabled = false;
+          burnButton.disabled = false;
+        } else {
+          status.innerText = `Connected: ${address} (Not the contract owner. Only the owner can mint/burn.)`;
+          mintButton.disabled = true;
+          burnButton.disabled = true;
+        }
+        window.contract = contract;
+        window.signer = signer;
       } catch (err) {
         console.error('Connection error:', err);
         status.innerText = `Connection failed: ${err.message}`;
@@ -107,35 +126,45 @@
 
     async function mintTokens() {
       const status = document.getElementById("status");
-      if (!window.contract) {
-        status.innerText = "Please connect wallet first.";
+      if (!window.contract || !isOwner) {
+        status.innerText = "Only the contract owner can mint.";
         return;
       }
       try {
         status.innerText = "Minting 1 OMC...";
         const amount = ethers.utils.parseUnits("1", 18);
-        const tx = await window.contract.mint(amount);
+        console.log('Minting:', { amount: amount.toString() });
+        const tx = await window.contract.mint(amount, {
+          gasLimit: 150000
+        });
+        console.log('Mint tx:', tx);
         await tx.wait();
         status.innerText = "✅ Minted 1 OMC token!";
       } catch (err) {
-        status.innerText = `Mint failed: ${err.message}`;
+        console.error('Mint error:', err);
+        status.innerText = `Mint failed: ${err.reason || err.message || 'Transaction reverted. Check contract permissions.'}`;
       }
     }
 
     async function burnTokens() {
       const status = document.getElementById("status");
-      if (!window.contract) {
-        status.innerText = "Please connect wallet first.";
+      if (!window.contract || !isOwner) {
+        status.innerText = "Only the contract owner can burn.";
         return;
       }
       try {
         status.innerText = "Burning 1 OMC...";
         const amount = ethers.utils.parseUnits("1", 18);
-        const tx = await window.contract.burn(amount);
+        console.log('Burning:', { amount: amount.toString() });
+        const tx = await window.contract.burn(amount, {
+          gasLimit: 150000
+        });
+        console.log('Burn tx:', tx);
         await tx.wait();
         status.innerText = "🔥 Burned 1 OMC token!";
       } catch (err) {
-        status.innerText = `Burn failed: ${err.message}`;
+        console.error('Burn error:', err);
+        status.innerText = `Burn failed: ${err.reason || err.message || 'Transaction reverted. Check contract permissions.'}`;
       }
     }
 
@@ -146,14 +175,20 @@
         return;
       }
       try {
-        const signer = window.contract.signer;
-        const address = await signer.getAddress();
+        const address = await window.signer.getAddress();
         const balance = await window.contract.balanceOf(address);
         status.innerText = `✔ Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
       } catch (err) {
+        console.error('Balance error:', err);
         status.innerText = `Balance check failed: ${err.message}`;
       }
     }
+
+    // TODO: For iOS app integration
+    // - Implement backend API to track user points (1000 points = 1 OMC mint).
+    // - Owner signs mint transactions for users via a secure backend (e.g., AWS Lambda).
+    // - Users burn tokens directly for in-app purchases, with owner approval if needed.
+    // - Use WalletConnect for seamless MetaMask integration in the iOS app.
   </script>
 </body>
 </html>
