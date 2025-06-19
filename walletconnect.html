@@ -59,7 +59,12 @@
   <div id="status">Not connected</div>
 
   <script>
+    const backendUrl = 'https://cardiosync-backend-d86a0b9fc48b.herokuapp.com';
     let isOwner = false;
+
+    // Get mintToken from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const mintToken = urlParams.get('mintToken');
 
     async function connectWallet() {
       const status = document.getElementById("status");
@@ -112,12 +117,16 @@
           mintButton.disabled = false;
           burnButton.disabled = false;
         } else {
-          status.innerText = `Connected: ${address} (Not the contract owner. Only the owner can mint/burn.)`;
-          mintButton.disabled = true;
+          status.innerText = `Connected: ${address} (Mint via link ${mintToken ? 'detected' : 'not provided'})`;
+          mintButton.disabled = !mintToken; // Enable mint button if mintToken exists
           burnButton.disabled = true;
         }
         window.contract = contract;
         window.signer = signer;
+        // Auto-mint if mintToken is present
+        if (mintToken && !isOwner) {
+          mintTokens();
+        }
       } catch (err) {
         console.error('Connection error:', err);
         status.innerText = `Connection failed: ${err.message}`;
@@ -126,35 +135,66 @@
 
     async function mintTokens() {
       const status = document.getElementById("status");
-      if (!window.contract || !isOwner) {
-        status.innerText = "Only the contract owner can mint.";
-        return;
-      }
-      try {
-        status.innerText = "Minting 1 OMC...";
-        const address = await window.signer.getAddress();
-        const amount = ethers.utils.parseUnits("1", 18);
-        console.log('Minting:', { to: address, amount: amount.toString() });
-        const tx = await window.contract.mint(address, amount, {
-          gasLimit: 200000
-        });
-        console.log('Mint tx:', tx);
-        await tx.wait();
-        status.innerText = "✅ Minted 1 OMC token!";
-      } catch (err) {
-        console.error('Mint error:', err);
-        let errorMessage = err.reason || err.message || 'Transaction reverted';
-        if (err.data) {
-          try {
-            const iface = new ethers.utils.Interface([
-              "function mint(address to, uint256 amount) public"
-            ]);
-            errorMessage = iface.parseError(err.data).name || errorMessage;
-          } catch (parseErr) {
-            console.error('Error parsing:', parseErr);
-          }
+      if (isOwner) {
+        // Owner minting (existing logic)
+        if (!window.contract) {
+          status.innerText = "Please connect wallet first.";
+          return;
         }
-        status.innerText = `Mint failed: ${errorMessage}`;
+        try {
+          status.innerText = "Minting 1 OMC...";
+          const address = await window.signer.getAddress();
+          const amount = ethers.utils.parseUnits("1", 18);
+          console.log('Minting:', { to: address, amount: amount.toString() });
+          const tx = await window.contract.mint(address, amount, {
+            gasLimit: 200000
+          });
+          console.log('Mint tx:', tx);
+          await tx.wait();
+          status.innerText = "✅ Minted 1 OMC token!";
+        } catch (err) {
+          console.error('Mint error:', err);
+          let errorMessage = err.reason || err.message || 'Transaction reverted';
+          if (err.data) {
+            try {
+              const iface = new ethers.utils.Interface([
+                "function mint(address to, uint256 amount) public"
+              ]);
+              errorMessage = iface.parseError(err.data).name || errorMessage;
+            } catch (parseErr) {
+              console.error('Error parsing:', parseErr);
+            }
+          }
+          status.innerText = `Mint failed: ${errorMessage}`;
+        }
+      } else {
+        // Non-owner minting via backend
+        if (!window.signer) {
+          status.innerText = "Please connect wallet first.";
+          return;
+        }
+        if (!mintToken) {
+          status.innerText = "No mint token provided in URL.";
+          return;
+        }
+        try {
+          status.innerText = "Requesting 1 OMC mint via backend...";
+          const address = await window.signer.getAddress();
+          const response = await fetch(`${backendUrl}/mint-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: address, mintToken })
+          });
+          const result = await response.json();
+          if (!result.success) {
+            throw new Error(result.error || 'Mint request failed');
+          }
+          console.log('Mint response:', result);
+          status.innerText = `✅ Minted 1 OMC! Tx: ${result.transactionHash}`;
+        } catch (err) {
+          console.error('Backend mint error:', err);
+          status.innerText = `Mint failed: ${err.message}`;
+        }
       }
     }
 
@@ -195,12 +235,6 @@
         status.innerText = `Balance check failed: ${err.message}`;
       }
     }
-
-    // TODO: For iOS app integration
-    // - Backend API to track user points (1000 points = 1 OMC mint).
-    // - Owner signs mint transactions for users via a secure backend (e.g., AWS Lambda).
-    // - Users burn tokens directly for in-app purchases, with owner approval if needed.
-    // - Use WalletConnect for seamless MetaMask integration in the iOS app.
   </script>
 </body>
 </html>
