@@ -128,8 +128,8 @@
           console.log('Mint tx:', tx);
           await tx.wait();
           status.innerText = "✅ Minted 1 OMC token!";
-          hasMinted = true; // Mark as minted
-          mintButton.disabled = true; // Disable mint button
+          hasMinted = true;
+          mintButton.disabled = true;
         } catch (err) {
           console.error('Mint error:', err);
           let errorMessage = err.reason || err.message || 'Transaction reverted';
@@ -173,8 +173,8 @@
           }
           console.log('Mint response:', result);
           status.innerText = `✅ Minted 1 OMC! Tx: ${result.transactionHash}`;
-          hasMinted = true; // Mark as minted
-          mintButton.disabled = true; // Disable mint button
+          hasMinted = true;
+          mintButton.disabled = true;
         } catch (err) {
           console.error('Backend mint error:', err);
           status.innerText = `Mint failed: ${err.message}`;
