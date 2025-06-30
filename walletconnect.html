@@ -35,6 +35,7 @@
   <script>
     const backendUrl = 'https://cardiosync-backend-d86a0b9fc48b.herokuapp.com';
     let isOwner = false;
+    let hasMinted = false; // Track if minting has occurred
 
     const urlParams = new URLSearchParams(window.location.search);
     const mintToken = urlParams.get('mintToken');
@@ -112,6 +113,7 @@
 
     async function mintTokens() {
       const status = document.getElementById("status");
+      const mintButton = document.getElementById("mintButton");
       if (isOwner) {
         if (!window.contract) {
           status.innerText = "Please connect wallet first.";
@@ -126,6 +128,8 @@
           console.log('Mint tx:', tx);
           await tx.wait();
           status.innerText = "✅ Minted 1 OMC token!";
+          hasMinted = true; // Mark as minted
+          mintButton.disabled = true; // Disable mint button
         } catch (err) {
           console.error('Mint error:', err);
           let errorMessage = err.reason || err.message || 'Transaction reverted';
@@ -150,6 +154,11 @@
           status.innerText = "No mint token provided in URL.";
           return;
         }
+        if (hasMinted) {
+          status.innerText = "This link has already been used.";
+          mintButton.disabled = true;
+          return;
+        }
         try {
           status.innerText = "Requesting 1 OMC mint via backend...";
           const address = await window.signer.getAddress();
@@ -164,6 +173,8 @@
           }
           console.log('Mint response:', result);
           status.innerText = `✅ Minted 1 OMC! Tx: ${result.transactionHash}`;
+          hasMinted = true; // Mark as minted
+          mintButton.disabled = true; // Disable mint button
         } catch (err) {
           console.error('Backend mint error:', err);
           status.innerText = `Mint failed: ${err.message}`;
