@@ -59,6 +59,9 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userAddress: '0x0000000000000000000000000000000000000000', mintToken }) // Use a dummy address
           });
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
           const result = await response.json();
           console.log('Token validation response:', result); // Debug log
           isTokenChecked = true;
@@ -75,7 +78,12 @@
           }
         } catch (err) {
           console.error('Token check error:', err);
-          status.innerText = "Link validation failed. This link is disabled.";
+          if (err.message.includes('Failed to fetch')) {
+            console.error('CORS or network issue detected:', err);
+            status.innerText = "Link validation failed due to CORS/network issue. Contact support.";
+          } else {
+            status.innerText = "Link validation failed. This link is disabled.";
+          }
           connectWalletButton.style.display = 'none';
           mintButton.style.display = 'none';
           return; // Disable on any error
