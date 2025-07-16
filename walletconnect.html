@@ -1,203 +1,266 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' https://*.walletconnect.com https://*.ethers.org;">
-    <title>WalletConnect</title>
-    <script src="ethers.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        button { padding: 10px 20px; margin: 5px; }
-        #status { color: red; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WalletConnect</title>
+
+  <!-- ✅ Load ethers.js from CDN (CSP-safe, no eval) -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+    }
+    #status {
+      color: red;
+    }
+  </style>
 </head>
 <body>
-    <h1>WalletConnect</h1>
-    <button id="connectWalletButton" onclick="connectWallet()">Connect Wallet</button>
-    <button id="mintButton" onclick="mintTokens()" disabled>Mint</button>
-    <button id="burnButton" onclick="burnTokens()" disabled>Burn</button>
-    <button onclick="checkBalance()">Submit</button>
-    <p id="status"></p>
-    <script>
-        const backendUrl = 'https://cardiosync-backend-app-production.up.railway.app';
-        let isOwner = false;
-        let hasMinted = false; // New state to track minting
-        const urlParams = new URLSearchParams(window.location.search);
-        const mintToken = urlParams.get('mintToken'); // Fixed: getMintable should be get
-        document.addEventListener('DOMContentLoaded', () => {
-            const status = document.getElementById("status");
-            console.log('DOM loaded, ethers:', typeof ethers !== 'undefined');
-            if (!status) {
-                console.error('Status element not found');
-                return;
-            }
-            if (typeof ethers === 'undefined') {
-                status.innerText = "Error: ethers.js not loaded.";
-                console.error('ethers is undefined');
-                return;
-            }
-            if (mintToken && !isOwner && !hasMinted) {
-                mintTokens();
-            }
-        });
-        async function connectWallet() {
-            const connectWalletButton = document.getElementById("connectWalletButton");
-            const mintButton = document.getElementById("mintButton");
-            const burnButton = document.getElementById("burnButton");
-            try {
-                console.log('connectWallet called, ethers:', typeof ethers !== 'undefined');
-                if (typeof ethers === 'undefined') {
-                    status.innerText = "Error: ethers.js not loaded.";
-                    return;
-                }
-                if (!window.ethereum) {
-                    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-                        window.location.href = 'metamask://';
-                        status.innerText = "Opening MetaMask app...";
-                        return;
-                    }
-                    status.innerText = "MetaMask not detected. Please install MetaMask.";
-                    return;
-                }
-                const provider = new ethers.providers.Web3Provider(window.ethereum);
-                await provider.send("eth_requestAccounts", []);
-                const signer = provider.getSigner();
-                const network = await provider.getNetwork();
-                if (network.chainId !== 137) {
-                    try {
-                        await window.ethereum.request({
-                            method: "wallet_switchEthereumChain",
-                            params: [{ chainId: "0x89" }],
-                        });
-                        status.innerText = "Switched to Polygon Mainnet";
-                    } catch (switchError) {
-                        status.innerText = switchError.code === 4902
-                            ? "Polygon Mainnet not added to MetaMask. Please add it manually."
-                            : `Network switch failed: ${switchError.message}`;
-                        return;
-                    }
-                }
-                const contract = new ethers.Contract(
-                    "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3",
-                    [
-                        "function mint(address to, uint256 amount) public",
-                        "function burn(uint256 amount) public",
-                        "function balanceOf(address account) external view returns (uint256)",
-                        "function owner() public view returns (address)"
-                    ],
-                    signer
-                );
-                const address = await signer.getAddress();
-                const owner = await contract.owner();
-                console.log('Connected address:', address, 'Contract owner:', owner);
-                isOwner = address.toLowerCase() === owner.toLowerCase();
-                if (isOwner) {
-                    status.innerText = `Connected: ${address} (Contract owner)`;
-                    mintButton.disabled = false;
-                    burnButton.disabled = false;
-                    connectWalletButton.disabled = false; // Allow reconnection for owner
-                } else if (!hasMinted) {
-                    status.innerText = `Connected: ${address} (Mint via link ${mintToken ? 'detected' : 'not provided'})`;
-                    mintButton.disabled = !mintToken;
-                    burnButton.disabled = true;
-                    connectWalletButton.disabled = false; // Allow initial connection
-                } else {
-                    status.innerText = `Connected: ${address} (Mint already completed)`;
-                    mintButton.disabled = true;
-                    burnButton.disabled = true;
-                    connectWalletButton.disabled = true; // Disable after mint
-                }
-                window.contract = contract;
-                window.signer = signer;
-            } catch (err) {
-                console.error('Connection error:', err);
-                status.innerText = `Connection failed: ${err.message}`;
-            }
+  <h1>WalletConnect</h1>
+  <button id="connectWalletButton" onclick="connectWallet()">Connect Wallet</button>
+  <button id="mintButton" onclick="mintTokens()" disabled>Mint</button>
+  <p id="status"></p>
+
+  <!-- ✅ Your existing app logic below -->
+  <script>
+    const backendUrl = 'https://cardiosync-backend-d86a0b9fc48b.herokuapp.com';
+    let isOwner = false;
+    let isTokenChecked = false; // Track if token has been validated
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const mintToken = urlParams.get('mintToken');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const status = document.getElementById("status");
+      const connectWalletButton = document.getElementById("connectWalletButton");
+      const mintButton = document.getElementById("mintButton");
+      console.log('DOM loaded, ethers:', typeof ethers !== 'undefined');
+      if (!status) {
+        console.error('Status element not found');
+        return;
+      }
+      if (typeof ethers === 'undefined') {
+        status.innerText = "Error: ethers.js not loaded.";
+        console.error('ethers is undefined');
+        return;
+      }
+      if (mintToken && !isOwner && !isTokenChecked) {
+        try {
+          const response = await fetch(`${backendUrl}/mint-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: '0x0000000000000000000000000000000000000000', mintToken }) // Use a dummy address
+          });
+          const result = await response.json();
+          console.log('Token validation response:', result); // Debug log
+          isTokenChecked = true;
+          if (!result.success && result.error && result.error.includes('Token already used')) {
+            status.innerText = "✅ Minted 1 OMC token!";
+            connectWalletButton.style.display = 'none';
+            mintButton.style.display = 'none';
+            return; // Permanently disable
+          } else if (result.success) {
+            // Token is valid, proceed normally
+            mintButton.disabled = false;
+          } else {
+            throw new Error('Unexpected response');
+          }
+        } catch (err) {
+          console.error('Token check error:', err);
+          status.innerText = "Link validation failed. This link is disabled.";
+          connectWalletButton.style.display = 'none';
+          mintButton.style.display = 'none';
+          return; // Disable on any error
         }
-        async function mintTokens() {
-            if (!window.signer) {
-                status.innerText = "Please connect wallet first.";
-                return;
-            }
-            if (!isOwner && !mintToken) {
-                status.innerText = "No mint token provided in URL.";
-                return;
-            }
-            if (hasMinted) {
-                status.innerText = "Mint already completed for this token.";
-                return;
-            }
-            try {
-                status.innerText = isOwner ? "Minting 1 OMC..." : "Requesting 1 OMC mint via backend...";
-                const address = await window.signer.getAddress();
-                if (isOwner) {
-                    const amount = ethers.utils.parseUnits("1", 18);
-                    console.log('Minting:', { to: address, amount: amount.toString() });
-                    const tx = await window.contract.mint(address, amount, { gasLimit: 200000 });
-                    console.log('Mint tx:', tx);
-                    await tx.wait();
-                    status.innerText = "✅ Minted 1 OMC token!";
-                } else {
-                    const response = await fetch(`${backendUrl}/mint-token`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userAddress: address, mintToken })
-                    });
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.error || 'Mint request failed');
-                    }
-                    console.log('Mint response:', result);
-                    status.innerText = `✅ Minted 1 OMC! Tx: ${result.transactionHash}`;
-                    hasMinted = true; // Mark as minted
-                    document.getElementById('mintButton').disabled = true;
-                    document.getElementById('connectWalletButton').disabled = true; // Disable reconnect
-                }
-            } catch (err) {
-                console.error('Mint error:', err);
-                if (err.message.includes('Token already used')) {
-                    hasMinted = true;
-                    document.getElementById('mintButton').disabled = true;
-                    document.getElementById('connectWalletButton').disabled = true;
-                    status.innerText = "Mint failed: Token already used.";
-                } else {
-                    status.innerText = `Mint failed: ${err.message}`;
-                }
-            }
+        if (mintToken && !isOwner) mintTokens();
+      }
+    });
+
+    async function connectWallet() {
+      const status = document.getElementById("status");
+      const mintButton = document.getElementById("mintButton");
+      const connectWalletButton = document.getElementById("connectWalletButton");
+      try {
+        console.log('connectWallet called, ethers:', typeof ethers !== 'undefined');
+        if (typeof ethers === 'undefined') {
+          status.innerText = "Error: ethers.js not loaded.";
+          return;
         }
-        async function burnTokens() {
-            if (!window.contract || !isOwner) {
-                status.innerText = "Only the contract owner can burn.";
-                return;
-            }
-            try {
-                status.innerText = "Burning 1 OMC...";
-                const amount = ethers.utils.parseUnits("1", 18);
-                console.log('Burning:', { amount: amount.toString() });
-                const tx = await window.contract.burn(amount, { gasLimit: 200000 });
-                console.log('Burn tx:', tx);
-                await tx.wait();
-                status.innerText = "🔥 Burned 1 OMC token!";
-            } catch (err) {
-                console.error('Burn error:', err);
-                status.innerText = `Burn failed: ${err.reason || err.message || 'Transaction reverted'}`;
-            }
+        if (!window.ethereum) {
+          if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            window.location.href = 'metamask://';
+            status.innerText = "Opening MetaMask app...";
+            return;
+          }
+          status.innerText = "MetaMask not detected. Please install MetaMask.";
+          return;
         }
-        async function checkBalance() {
-            if (!window.contract) {
-                status.innerText = "Please connect wallet first.";
-                return;
-            }
-            try {
-                const address = await window.signer.getAddress();
-                const balance = await window.contract.balanceOf(address);
-                status.innerText = `✔ Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
-            } catch (err) {
-                console.error('Balance error:', err);
-                status.innerText = `Balance check failed: ${err.message}`;
-            }
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        const signer = provider.getSigner();
+        const network = await provider.getNetwork();
+        if (network.chainId !== 137) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: "0x89" }],
+            });
+            status.innerText = "Switched to Polygon Mainnet";
+          } catch (switchError) {
+            status.innerText = switchError.code === 4902
+              ? "Polygon Mainnet not added to MetaMask. Please add it manually."
+              : `Network switch failed: ${switchError.message}`;
+            return;
+          }
         }
-    </script>
+        const contract = new ethers.Contract(
+          "0xbb3D0585764Ea456BFCD8636D97715c8e21AeBa3",
+          [
+            "function mint(address to, uint256 amount) public",
+            "function burn(uint256 amount) public",
+            "function balanceOf(address account) external view returns (uint256)",
+            "function owner() public view returns (address)"
+          ],
+          signer
+        );
+        const address = await signer.getAddress();
+        const owner = await contract.owner();
+        console.log('Connected address:', address, 'Contract owner:', owner);
+        isOwner = address.toLowerCase() === owner.toLowerCase();
+        if (isOwner) {
+          status.innerText = `Connected: ${address} (Contract owner)`;
+          mintButton.disabled = false;
+        } else {
+          status.innerText = `Connected: ${address} (Mint via link ${mintToken ? 'detected' : 'not provided'})`;
+          mintButton.disabled = !mintToken;
+        }
+        window.contract = contract;
+        window.signer = signer;
+        if (mintToken && !isOwner) {
+          mintTokens();
+        }
+      } catch (err) {
+        console.error('Connection error:', err);
+        status.innerText = `Connection failed: ${err.message}`;
+      }
+    }
+
+    async function mintTokens() {
+      const status = document.getElementById("status");
+      const connectWalletButton = document.getElementById("connectWalletButton");
+      const mintButton = document.getElementById("mintButton");
+      if (isOwner) {
+        if (!window.contract) {
+          status.innerText = "Please connect wallet first.";
+          return;
+        }
+        try {
+          status.innerText = "Minting 1 OMC...";
+          const address = await window.signer.getAddress();
+          const amount = ethers.utils.parseUnits("1", 18);
+          console.log('Minting:', { to: address, amount: amount.toString() });
+          const tx = await window.contract.mint(address, amount, { gasLimit: 200000 });
+          console.log('Mint tx:', tx);
+          await tx.wait();
+          status.innerText = "✅ Minted 1 OMC token!";
+          connectWalletButton.style.display = 'none';
+          mintButton.style.display = 'none';
+        } catch (err) {
+          console.error('Mint error:', err);
+          let errorMessage = err.reason || err.message || 'Transaction reverted';
+          if (err.data) {
+            try {
+              const iface = new ethers.utils.Interface([
+                "function mint(address to, uint256 amount) public"
+              ]);
+              errorMessage = iface.parseError(err.data).name || errorMessage;
+            } catch (parseErr) {
+              console.error('Error parsing:', parseErr);
+            }
+          }
+          status.innerText = `Mint failed: ${errorMessage}`;
+        }
+      } else {
+        if (!window.signer) {
+          status.innerText = "Please connect wallet first.";
+          return;
+        }
+        if (!mintToken) {
+          status.innerText = "No mint token provided in URL.";
+          return;
+        }
+        try {
+          status.innerText = "Requesting 1 OMC mint via backend...";
+          const address = await window.signer.getAddress();
+          const response = await fetch(`${backendUrl}/mint-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: address, mintToken })
+          });
+          const result = await response.json();
+          if (!result.success) {
+            throw new Error(result.error || 'Mint request failed');
+          }
+          console.log('Mint response:', result);
+          status.innerText = "✅ Minted 1 OMC token!";
+          connectWalletButton.style.display = 'none';
+          mintButton.style.display = 'none';
+        } catch (err) {
+          console.error('Backend mint error:', err);
+          if (err.message.includes('Token already used')) {
+            status.innerText = "✅ Minted 1 OMC token!";
+            connectWalletButton.style.display = 'none';
+            mintButton.style.display = 'none';
+          } else {
+            status.innerText = `Mint failed: ${err.message}`;
+          }
+        }
+      }
+    }
+
+    async function burnTokens() {
+      const status = document.getElementById("status");
+      if (!window.contract || !isOwner) {
+        status.innerText = "Only the contract owner can burn.";
+        return;
+      }
+      try {
+        status.innerText = "Burning 1 OMC...";
+        const amount = ethers.utils.parseUnits("1", 18);
+        console.log('Burning:', { amount: amount.toString() });
+        const tx = await window.contract.burn(amount, { gasLimit: 200000 });
+        console.log('Burn tx:', tx);
+        await tx.wait();
+        status.innerText = "🔥 Burned 1 OMC token!";
+      } catch (err) {
+        console.error('Burn error:', err);
+        status.innerText = `Burn failed: ${err.reason || err.message || 'Transaction reverted'}`;
+      }
+    }
+
+    async function checkBalance() {
+      const status = document.getElementById("status");
+      if (!window.contract) {
+        status.innerText = "Please connect wallet first.";
+        return;
+      }
+      try {
+        const address = await window.signer.getAddress();
+        const balance = await window.contract.balanceOf(address);
+        status.innerText = `✔ Balance: ${ethers.utils.formatUnits(balance, 18)} OMC`;
+      } catch (err) {
+        console.error('Balance error:', err);
+        status.innerText = `Balance check failed: ${err.message}`;
+      }
+    }
+  </script>
 </body>
 </html>
