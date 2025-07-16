@@ -25,17 +25,14 @@
 </head>
 <body>
   <h1>WalletConnect</h1>
-  <button onclick="connectWallet()">Connect Wallet</button>
+  <button id="connectWalletButton" onclick="connectWallet()">Connect Wallet</button>
   <button id="mintButton" onclick="mintTokens()" disabled>Mint</button>
-  <button id="burnButton" onclick="burnTokens()" disabled>Burn</button>
-  <button onclick="checkBalance()">Submit</button>
   <p id="status"></p>
 
   <!-- ✅ Your existing app logic below -->
   <script>
     const backendUrl = 'https://cardiosync-backend-d86a0b9fc48b.herokuapp.com';
     let isOwner = false;
-    let hasMinted = false; // Track if minting has occurred
 
     const urlParams = new URLSearchParams(window.location.search);
     const mintToken = urlParams.get('mintToken');
@@ -43,7 +40,7 @@
     async function connectWallet() {
       const status = document.getElementById("status");
       const mintButton = document.getElementById("mintButton");
-      const burnButton = document.getElementById("burnButton");
+      const connectWalletButton = document.getElementById("connectWalletButton"); // Added for control
       try {
         console.log('connectWallet called, ethers:', typeof ethers !== 'undefined');
         if (typeof ethers === 'undefined') {
@@ -94,11 +91,9 @@
         if (isOwner) {
           status.innerText = `Connected: ${address} (Contract owner)`;
           mintButton.disabled = false;
-          burnButton.disabled = false;
         } else {
           status.innerText = `Connected: ${address} (Mint via link ${mintToken ? 'detected' : 'not provided'})`;
           mintButton.disabled = !mintToken;
-          burnButton.disabled = true;
         }
         window.contract = contract;
         window.signer = signer;
@@ -113,7 +108,7 @@
 
     async function mintTokens() {
       const status = document.getElementById("status");
-      const mintButton = document.getElementById("mintButton");
+      const connectWalletButton = document.getElementById("connectWalletButton"); // Added for control
       if (isOwner) {
         if (!window.contract) {
           status.innerText = "Please connect wallet first.";
@@ -128,8 +123,7 @@
           console.log('Mint tx:', tx);
           await tx.wait();
           status.innerText = "✅ Minted 1 OMC token!";
-          hasMinted = true;
-          mintButton.disabled = true;
+          connectWalletButton.style.display = 'none'; // Hide Connect Wallet on success
         } catch (err) {
           console.error('Mint error:', err);
           let errorMessage = err.reason || err.message || 'Transaction reverted';
@@ -154,11 +148,6 @@
           status.innerText = "No mint token provided in URL.";
           return;
         }
-        if (hasMinted) {
-          status.innerText = "This link has already been used.";
-          mintButton.disabled = true;
-          return;
-        }
         try {
           status.innerText = "Requesting 1 OMC mint via backend...";
           const address = await window.signer.getAddress();
@@ -173,11 +162,15 @@
           }
           console.log('Mint response:', result);
           status.innerText = `✅ Minted 1 OMC! Tx: ${result.transactionHash}`;
-          hasMinted = true;
-          mintButton.disabled = true;
+          connectWalletButton.style.display = 'none'; // Hide Connect Wallet on success
         } catch (err) {
           console.error('Backend mint error:', err);
-          status.innerText = `Mint failed: ${err.message}`;
+          if (err.message.includes('Token already used')) {
+            status.innerText = "Mint failed: Token already used.";
+            connectWalletButton.style.display = 'none'; // Hide on used token
+          } else {
+            status.innerText = `Mint failed: ${err.message}`;
+          }
         }
       }
     }
