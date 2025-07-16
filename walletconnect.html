@@ -109,6 +109,7 @@
     async function mintTokens() {
       const status = document.getElementById("status");
       const connectWalletButton = document.getElementById("connectWalletButton"); // Added for control
+      const mintButton = document.getElementById("mintButton"); // Added for control
       if (isOwner) {
         if (!window.contract) {
           status.innerText = "Please connect wallet first.";
@@ -124,6 +125,7 @@
           await tx.wait();
           status.innerText = "✅ Minted 1 OMC token!";
           connectWalletButton.style.display = 'none'; // Hide Connect Wallet on success
+          mintButton.style.display = 'none'; // Hide Mint button on success
         } catch (err) {
           console.error('Mint error:', err);
           let errorMessage = err.reason || err.message || 'Transaction reverted';
@@ -161,13 +163,15 @@
             throw new Error(result.error || 'Mint request failed');
           }
           console.log('Mint response:', result);
-          status.innerText = `✅ Minted 1 OMC! Tx: ${result.transactionHash}`;
+          status.innerText = "✅ Minted 1 OMC token!"; // Show only this message
           connectWalletButton.style.display = 'none'; // Hide Connect Wallet on success
+          mintButton.style.display = 'none'; // Hide Mint button on success
         } catch (err) {
           console.error('Backend mint error:', err);
           if (err.message.includes('Token already used')) {
-            status.innerText = "Mint failed: Token already used.";
+            status.innerText = "✅ Minted 1 OMC token!"; // Show only this message
             connectWalletButton.style.display = 'none'; // Hide on used token
+            mintButton.style.display = 'none'; // Hide Mint button on used token
           } else {
             status.innerText = `Mint failed: ${err.message}`;
           }
