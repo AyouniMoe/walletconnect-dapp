@@ -37,10 +37,45 @@
     const urlParams = new URLSearchParams(window.location.search);
     const mintToken = urlParams.get('mintToken');
 
+    document.addEventListener('DOMContentLoaded', async () => {
+      const status = document.getElementById("status");
+      const connectWalletButton = document.getElementById("connectWalletButton");
+      const mintButton = document.getElementById("mintButton");
+      console.log('DOM loaded, ethers:', typeof ethers !== 'undefined');
+      if (!status) {
+        console.error('Status element not found');
+        return;
+      }
+      if (typeof ethers === 'undefined') {
+        status.innerText = "Error: ethers.js not loaded.";
+        console.error('ethers is undefined');
+        return;
+      }
+      if (mintToken && !isOwner) {
+        try {
+          const response = await fetch(`${backendUrl}/mint-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: '', mintToken }) // Empty address for check
+          });
+          const result = await response.json();
+          if (result.error && result.error.includes('Token already used')) {
+            status.innerText = "✅ Minted 1 OMC token!";
+            connectWalletButton.style.display = 'none';
+            mintButton.style.display = 'none';
+            return; // Stop further execution
+          }
+        } catch (err) {
+          console.error('Token check error:', err);
+        }
+        mintTokens();
+      }
+    });
+
     async function connectWallet() {
       const status = document.getElementById("status");
       const mintButton = document.getElementById("mintButton");
-      const connectWalletButton = document.getElementById("connectWalletButton"); // Added for control
+      const connectWalletButton = document.getElementById("connectWalletButton");
       try {
         console.log('connectWallet called, ethers:', typeof ethers !== 'undefined');
         if (typeof ethers === 'undefined') {
@@ -108,8 +143,8 @@
 
     async function mintTokens() {
       const status = document.getElementById("status");
-      const connectWalletButton = document.getElementById("connectWalletButton"); // Added for control
-      const mintButton = document.getElementById("mintButton"); // Added for control
+      const connectWalletButton = document.getElementById("connectWalletButton");
+      const mintButton = document.getElementById("mintButton");
       if (isOwner) {
         if (!window.contract) {
           status.innerText = "Please connect wallet first.";
@@ -124,8 +159,8 @@
           console.log('Mint tx:', tx);
           await tx.wait();
           status.innerText = "✅ Minted 1 OMC token!";
-          connectWalletButton.style.display = 'none'; // Hide Connect Wallet on success
-          mintButton.style.display = 'none'; // Hide Mint button on success
+          connectWalletButton.style.display = 'none';
+          mintButton.style.display = 'none';
         } catch (err) {
           console.error('Mint error:', err);
           let errorMessage = err.reason || err.message || 'Transaction reverted';
@@ -163,15 +198,15 @@
             throw new Error(result.error || 'Mint request failed');
           }
           console.log('Mint response:', result);
-          status.innerText = "✅ Minted 1 OMC token!"; // Show only this message
-          connectWalletButton.style.display = 'none'; // Hide Connect Wallet on success
-          mintButton.style.display = 'none'; // Hide Mint button on success
+          status.innerText = "✅ Minted 1 OMC token!";
+          connectWalletButton.style.display = 'none';
+          mintButton.style.display = 'none';
         } catch (err) {
           console.error('Backend mint error:', err);
           if (err.message.includes('Token already used')) {
-            status.innerText = "✅ Minted 1 OMC token!"; // Show only this message
-            connectWalletButton.style.display = 'none'; // Hide on used token
-            mintButton.style.display = 'none'; // Hide Mint button on used token
+            status.innerText = "✅ Minted 1 OMC token!";
+            connectWalletButton.style.display = 'none';
+            mintButton.style.display = 'none';
           } else {
             status.innerText = `Mint failed: ${err.message}`;
           }
