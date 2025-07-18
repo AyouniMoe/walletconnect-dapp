@@ -131,79 +131,51 @@
       const status = document.getElementById("status");
       const connectWalletButton = document.getElementById("connectWalletButton");
       const mintButton = document.getElementById("mintButton");
-      if (isOwner) {
-        if (!window.contract) {
-          status.innerText = "Please connect wallet first.";
-          return;
+      if (!window.contract) {
+        status.innerText = "Please connect wallet first.";
+        return;
+      }
+      if (!mintToken) {
+        status.innerText = "No mint token provided in URL.";
+        return;
+      }
+      try {
+        status.innerText = "Validating and minting 1 OMC via backend...";
+        const address = await window.signer.getAddress();
+        const response = await fetch(`${backendUrl}/mint-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userAddress: address, mintToken })
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-        try {
-          status.innerText = "Minting 1 OMC...";
-          const address = await window.signer.getAddress();
-          const amount = ethers.utils.parseUnits("1", 18);
-          console.log('Minting:', { to: address, amount: amount.toString() });
-          const tx = await window.contract.mint(address, amount, { gasLimit: 200000 });
-          console.log('Mint tx:', tx);
-          await tx.wait();
-          status.innerText = "✅ Minted 1 OMC token!";
+        const result = await response.json();
+        console.log('Mint response:', result);
+        if (!result.success) {
+          throw new Error(result.error || 'Mint request failed');
+        }
+        // If mint succeeds, proceed with on-chain mint (for owner or non-owner)
+        const amount = ethers.utils.parseUnits("1", 18);
+        const tx = await window.contract.mint(address, amount, { gasLimit: 200000 });
+        console.log('Mint tx:', tx);
+        await tx.wait();
+        status.innerText = "✅ Minted 1 OMC token!";
+        connectWalletButton.style.display = 'none';
+        mintButton.style.display = 'none';
+      } catch (err) {
+        console.error('Backend mint error:', err);
+        if (err.message.includes('Token already used')) {
+          status.innerText = "Link validation failed. This link is disabled.";
           connectWalletButton.style.display = 'none';
           mintButton.style.display = 'none';
-        } catch (err) {
-          console.error('Mint error:', err);
-          let errorMessage = err.reason || err.message || 'Transaction reverted';
-          if (err.data) {
-            try {
-              const iface = new ethers.utils.Interface([
-                "function mint(address to, uint256 amount) public"
-              ]);
-              errorMessage = iface.parseError(err.data).name || errorMessage;
-            } catch (parseErr) {
-              console.error('Error parsing:', parseErr);
-            }
-          }
-          status.innerText = `Mint failed: ${errorMessage}`;
-        }
-      } else {
-        if (!window.signer) {
-          status.innerText = "Please connect wallet first.";
-          return;
-        }
-        if (!mintToken) {
-          status.innerText = "No mint token provided in URL.";
-          return;
-        }
-        try {
-          status.innerText = "Validating and minting 1 OMC via backend...";
-          const address = await window.signer.getAddress();
-          const response = await fetch(`${backendUrl}/mint-token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAddress: address, mintToken })
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const result = await response.json();
-          console.log('Mint response:', result);
-          if (!result.success) {
-            throw new Error(result.error || 'Mint request failed');
-          }
-          status.innerText = "✅ Minted 1 OMC token!";
+        } else if (err.message.includes('Failed to fetch')) {
+          console.error('CORS or network issue detected:', err);
+          status.innerText = "Link validation failed due to CORS/network issue. Contact support.";
           connectWalletButton.style.display = 'none';
           mintButton.style.display = 'none';
-        } catch (err) {
-          console.error('Backend mint error:', err);
-          if (err.message.includes('Token already used')) {
-            status.innerText = "Link validation failed. This link is disabled.";
-            connectWalletButton.style.display = 'none';
-            mintButton.style.display = 'none';
-          } else if (err.message.includes('Failed to fetch')) {
-            console.error('CORS or network issue detected:', err);
-            status.innerText = "Link validation failed due to CORS/network issue. Contact support.";
-            connectWalletButton.style.display = 'none';
-            mintButton.style.display = 'none';
-          } else {
-            status.innerText = `Mint failed: ${err.message}`;
-          }
+        } else {
+          status.innerText = `Mint failed: ${err.message}`;
         }
       }
     }
