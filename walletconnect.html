@@ -36,7 +36,7 @@
     let isTokenChecked = false; // Track if token has been validated
 
     const urlParams = new URLSearchParams(window.location.search);
-    const mintToken = urlParams.get('mintToken');
+    const mintToken = urlParams.get('token');
 
     document.addEventListener('DOMContentLoaded', () => {
       const status = document.getElementById("status");
@@ -156,13 +156,10 @@
           throw new Error(result.error || 'Mint request failed');
         }
         // If mint succeeds, proceed with on-chain mint (for owner or non-owner)
-        const amount = ethers.utils.parseUnits("1", 18);
-        const tx = await window.contract.mint(address, amount, { gasLimit: 200000 });
-        console.log('Mint tx:', tx);
-        await tx.wait();
-        status.innerText = "✅ Minted 1 OMC token!";
+        status.innerText = `✅ Minted 1 OMC token! Tx: ${result.transactionHash}`;
         connectWalletButton.style.display = 'none';
         mintButton.style.display = 'none';
+        
       } catch (err) {
         console.error('Backend mint error:', err);
         if (err.message.includes('Token already used')) {
